@@ -1,4 +1,4 @@
-const { OPCUAClient, AttributeIds, resolveNodeId } = require("node-opcua");
+const { OPCUAClient, AttributeIds, resolveNodeId, browse_service } = require("node-opcua");
 const express = require('express');
 const app = express();
 const http = require('http').createServer(app);
@@ -23,6 +23,20 @@ let globalConnectionState = {
     status: 'initializing',
     message: 'Starting up...'
 };
+
+async function findVariableByName(session, parentNodeId, variableName) {
+    try {
+        const browseResult = await session.browse(parentNodeId);
+        for (const reference of browseResult.references) {
+            if (reference.browseName.name === variableName) {
+                return reference.nodeId;
+            }
+        }
+    } catch (err) {
+        console.error(`Error finding variable ${variableName}:`, err.message);
+    }
+    return null;
+}
 
 async function connectToServer(client) {
     try {
@@ -118,45 +132,54 @@ async function main() {
         };
         io.emit('connection-status', globalConnectionState);
 
-        // Browse root folder to find objects
+        // Find MyObject node
         const browseResult = await session.browse("RootFolder");
-        console.log("Root folder contents:", browseResult.references.map(ref => ({
-            nodeId: ref.nodeId.toString(),
-            browseName: ref.browseName.toString()
-        })));
-
-        // Find Objects folder and browse it
         const objectsFolder = browseResult.references.find(ref => ref.browseName.name === "Objects");
-        if (objectsFolder) {
-            const objectsFolderBrowse = await session.browse(objectsFolder.nodeId.toString());
-            console.log("Objects folder contents:", objectsFolderBrowse.references.map(ref => ({
-                nodeId: ref.nodeId.toString(),
-                browseName: ref.browseName.toString()
-            })));
 
-            // Browse MyObject to get its variables
-            const myObject = objectsFolderBrowse.references.find(ref => ref.browseName.name === "MyObject");
-            if (myObject) {
-                const myObjectBrowse = await session.browse(myObject.nodeId.toString());
-                console.log("MyObject contents:", myObjectBrowse.references.map(ref => ({
-                    nodeId: ref.nodeId.toString(),
-                    browseName: ref.browseName.toString()
-                })));
-            }
+        if (!objectsFolder) {
+            throw new Error("Objects folder not found");
         }
 
-        // Read variables using the correct namespace index and path
+        const objectsFolderBrowse = await session.browse(objectsFolder.nodeId.toString());
+        const myObject = objectsFolderBrowse.references.find(ref => ref.browseName.name === "MyObject");
+
+        if (!myObject) {
+            throw new Error("MyObject not found");
+        }
+
+        console.log("Found MyObject:", myObject.nodeId.toString());
+
+        // Find variable nodes by name
+        const temperatureNode = await findVariableByName(session, myObject.nodeId.toString(), "Temperature");
+        const pressureNode = await findVariableByName(session, myObject.nodeId.toString(), "Pressure");
+        const statusNode = await findVariableByName(session, myObject.nodeId.toString(), "Status");
+
+        console.log("temperatureNode:", temperatureNode);
+        console.log("pressureNode:", pressureNode);
+        console.log("statusNode:", statusNode);
+
+        if (!temperatureNode || !pressureNode || !statusNode) {
+            throw new Error("Failed to find all required variables");
+        }
+
+        console.log("Found nodes:", {
+            Temperature: temperatureNode.toString(),
+            Pressure: pressureNode.toString(),
+            Status: statusNode.toString()
+        });
+
+        // Read variables using the found node IDs
         const nodesToRead = [
             {
-                nodeId: "ns=2;i=2",  // Temperature
+                nodeId: temperatureNode,
                 attributeId: AttributeIds.Value
             },
             {
-                nodeId: "ns=2;i=3",  // Pressure
+                nodeId: pressureNode,
                 attributeId: AttributeIds.Value
             },
             {
-                nodeId: "ns=2;i=4",  // Status
+                nodeId: statusNode,
                 attributeId: AttributeIds.Value
             }
         ];
