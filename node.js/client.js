@@ -1,4 +1,4 @@
-const { OPCUAClient, AttributeIds, resolveNodeId, browse_service } = require("node-opcua");
+const { OPCUAClient, AttributeIds, resolveNodeId } = require("node-opcua");
 const express = require('express');
 const app = express();
 const http = require('http').createServer(app);
@@ -18,11 +18,15 @@ const connectionStrategy = {
     maxDelay: 10 * 1000
 };
 
-// Global state to track OPC-UA connection status
-let globalConnectionState = {
-    status: 'initializing',
-    message: 'Starting up...'
-};
+// Configuration for multiple servers
+const servers = [
+    { port: 4840, name: "Server 1" },
+    { port: 4841, name: "Server 2" },
+    { port: 4842, name: "Server 3" }
+];
+
+// Global state to track OPC-UA connections status
+const globalConnectionStates = {};
 
 async function findVariableByName(session, parentNodeId, variableName) {
     try {
@@ -38,23 +42,15 @@ async function findVariableByName(session, parentNodeId, variableName) {
     return null;
 }
 
-async function connectToServer(client) {
+async function connectToServer(client, port) {
     try {
-        const endpointUrl = "opc.tcp://localhost:4840/freeopcua/server/";
-        console.log("Trying to connect to:", endpointUrl);
+        const endpointUrl = `opc.tcp://localhost:${port}/freeopcua/server/`;
+        console.log(`Trying to connect to: ${endpointUrl}`);
         await client.connect(endpointUrl);
-        console.log("Connected to OPC-UA server!");
-        globalConnectionState = {
-            status: 'connected',
-            message: 'Connected to OPC-UA server'
-        };
+        console.log(`Connected to OPC-UA server on port ${port}!`);
         return true;
     } catch (err) {
-        console.error("Connection failed:", err.message);
-        globalConnectionState = {
-            status: 'error',
-            message: 'Connection failed: ' + err.message
-        };
+        console.error(`Connection failed for port ${port}:`, err.message);
         return false;
     }
 }
@@ -62,75 +58,89 @@ async function connectToServer(client) {
 // Handle Socket.IO connections
 io.on('connection', (socket) => {
     console.log('Web client connected');
-    // Send current connection state to newly connected clients
-    socket.emit('connection-status', globalConnectionState);
+
+    // Send current connection states to newly connected clients
+    socket.emit('all-connection-status', globalConnectionStates);
+
+    // Handle connection status requests
+    socket.on('request-connection-status', () => {
+        socket.emit('all-connection-status', globalConnectionStates);
+    });
 });
 
-async function main() {
-    try {
-        // Start HTTP server first so we can show connection status
-        http.listen(3000, () => {
-            console.log('Web server listening on http://localhost:3000');
-        });
+async function setupServerConnection(serverConfig) {
+    const { port, name } = serverConfig;
 
+    try {
         // Create client
         const client = OPCUAClient.create({
-            applicationName: "NodeOPCUA-Client",
+            applicationName: `NodeOPCUA-Client-${port}`,
             connectionStrategy: connectionStrategy,
             securityMode: 1,
             securityPolicy: "None",
             endpoint_must_exist: false
         });
 
+        // Initialize connection state
+        globalConnectionStates[port] = {
+            status: 'connecting',
+            message: `Attempting to connect to ${name} (Port ${port})...`,
+            port: port
+        };
+        io.emit('server-connection-status', globalConnectionStates[port]);
+
         // Handle client events
         client.on("backoff", (retry, delay) => {
-            const message = `Retrying to connect (attempt #${retry}, delay: ${delay}ms)`;
+            const message = `Retrying to connect to ${name} (attempt #${retry}, delay: ${delay}ms)`;
             console.log(message);
-            globalConnectionState = {
+            globalConnectionStates[port] = {
                 status: 'connecting',
-                message: message
+                message: message,
+                port: port
             };
-            io.emit('connection-status', globalConnectionState);
+            io.emit('server-connection-status', globalConnectionStates[port]);
         });
 
         client.on("connection_lost", () => {
-            console.log("Connection lost!");
-            globalConnectionState = {
+            console.log(`Connection lost to ${name}!`);
+            globalConnectionStates[port] = {
                 status: 'disconnected',
-                message: 'Connection to OPC-UA server lost! Attempting to reconnect...'
+                message: `Connection to ${name} lost! Attempting to reconnect...`,
+                port: port
             };
-            io.emit('connection-status', globalConnectionState);
+            io.emit('server-connection-status', globalConnectionStates[port]);
         });
 
         client.on("connection_reestablished", () => {
-            console.log("Connection reestablished!");
-            globalConnectionState = {
+            console.log(`Connection reestablished to ${name}!`);
+            globalConnectionStates[port] = {
                 status: 'connected',
-                message: 'Connection reestablished'
+                message: `Connection reestablished to ${name}`,
+                port: port
             };
-            io.emit('connection-status', globalConnectionState);
+            io.emit('server-connection-status', globalConnectionStates[port]);
         });
 
-        // Initial connection attempt
-        globalConnectionState = {
-            status: 'connecting',
-            message: 'Attempting to connect to OPC-UA server...'
-        };
-        io.emit('connection-status', globalConnectionState);
-
-        const connected = await connectToServer(client);
+        const connected = await connectToServer(client, port);
         if (!connected) {
-            throw new Error("Failed to connect to OPC-UA server");
+            globalConnectionStates[port] = {
+                status: 'error',
+                message: `Failed to connect to ${name}`,
+                port: port
+            };
+            io.emit('server-connection-status', globalConnectionStates[port]);
+            throw new Error(`Failed to connect to ${name}`);
         }
 
         // Create session
         const session = await client.createSession();
-        console.log("Session created successfully");
-        globalConnectionState = {
+        console.log(`Session created successfully for ${name}`);
+        globalConnectionStates[port] = {
             status: 'connected',
-            message: 'Connected and session created'
+            message: `Connected to ${name}`,
+            port: port
         };
-        io.emit('connection-status', globalConnectionState);
+        io.emit('server-connection-status', globalConnectionStates[port]);
 
         // Find MyObject node
         const browseResult = await session.browse("RootFolder");
@@ -147,26 +157,14 @@ async function main() {
             throw new Error("MyObject not found");
         }
 
-        console.log("Found MyObject:", myObject.nodeId.toString());
-
         // Find variable nodes by name
         const temperatureNode = await findVariableByName(session, myObject.nodeId.toString(), "Temperature");
         const pressureNode = await findVariableByName(session, myObject.nodeId.toString(), "Pressure");
         const statusNode = await findVariableByName(session, myObject.nodeId.toString(), "Status");
 
-        console.log("temperatureNode:", temperatureNode);
-        console.log("pressureNode:", pressureNode);
-        console.log("statusNode:", statusNode);
-
         if (!temperatureNode || !pressureNode || !statusNode) {
             throw new Error("Failed to find all required variables");
         }
-
-        console.log("Found nodes:", {
-            Temperature: temperatureNode.toString(),
-            Pressure: pressureNode.toString(),
-            Status: statusNode.toString()
-        });
 
         // Read variables using the found node IDs
         const nodesToRead = [
@@ -189,55 +187,57 @@ async function main() {
             try {
                 const dataValue = await session.read(nodesToRead);
                 if (dataValue && dataValue.length === 3) {
-                    console.log("Read values:", {
-                        temperature: dataValue[0].value.value,
-                        pressure: dataValue[1].value.value,
-                        status: dataValue[2].value.value
-                    });
-
                     const data = {
+                        serverId: port,
+                        serverName: name,
                         temperature: dataValue[0].value.value,
                         pressure: dataValue[1].value.value,
                         status: dataValue[2].value.value,
                         timestamp: new Date().toISOString()
                     };
                     io.emit('opcua-data', data);
-                } else {
-                    console.error("Invalid data format received");
                 }
             } catch (err) {
-                console.error("Error reading values:", err.message);
-                globalConnectionState = {
+                console.error(`Error reading values from ${name}:`, err.message);
+                globalConnectionStates[port] = {
                     status: 'error',
-                    message: 'Error reading values: ' + err.message
+                    message: `Error reading values from ${name}: ${err.message}`,
+                    port: port
                 };
-                io.emit('connection-status', globalConnectionState);
+                io.emit('server-connection-status', globalConnectionStates[port]);
             }
         }, 1000);
 
         // Handle process termination
         process.on("SIGINT", async () => {
-            console.log("Closing session...");
+            console.log(`Closing session for ${name}...`);
             clearInterval(intervalId);
             await session.close();
             await client.disconnect();
-            globalConnectionState = {
-                status: 'disconnected',
-                message: 'Connection closed'
-            };
-            io.emit('connection-status', globalConnectionState);
             process.exit(0);
         });
 
     } catch (err) {
-        console.error("Fatal error:", err.message);
-        globalConnectionState = {
+        console.error(`Fatal error for ${name}:`, err.message);
+        globalConnectionStates[port] = {
             status: 'error',
-            message: 'Fatal error: ' + err.message
+            message: `Fatal error for ${name}: ${err.message}`,
+            port: port
         };
-        io.emit('connection-status', globalConnectionState);
-        process.exit(1);
+        io.emit('server-connection-status', globalConnectionStates[port]);
     }
+}
+
+async function main() {
+    // Start HTTP server
+    http.listen(3000, () => {
+        console.log('Web server listening on http://localhost:3000');
+    });
+
+    // Connect to all servers
+    servers.forEach(server => {
+        setupServerConnection(server);
+    });
 }
 
 main();

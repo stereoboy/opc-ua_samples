@@ -6,7 +6,7 @@
     <title>OPC-UA Client Dashboard</title>
     <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
     <style>
-        .card {
+        .server-card {
             margin-bottom: 20px;
             box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
         }
@@ -26,12 +26,23 @@
             padding: 10px 20px;
             border-radius: 5px;
             font-weight: bold;
-            margin: 0 auto 2rem auto;
-            max-width: 400px;
+            margin-bottom: 1rem;
         }
         .connection-message {
             font-size: 0.9rem;
             margin-top: 5px;
+        }
+        .server-header {
+            background-color: #f8f9fa;
+            padding: 10px;
+            border-radius: 5px;
+            margin-bottom: 15px;
+        }
+        .server-section {
+            border: 1px solid #dee2e6;
+            border-radius: 5px;
+            padding: 15px;
+            margin-bottom: 20px;
         }
     </style>
 </head>
@@ -39,60 +50,159 @@
     <div class="container mt-5">
         <h1 class="text-center mb-4">OPC-UA Client Dashboard</h1>
 
-        <!-- Connection Status -->
-        <div id="connection-status" class="connection-status bg-secondary text-white">
-            <div>Connection Status: <span id="connection-status-text">Initializing...</span></div>
-            <div class="connection-message" id="connection-message"></div>
-        </div>
-
         <div class="row">
+            <!-- Server 1 -->
             <div class="col-md-4">
-                <div class="card">
-                    <div class="card-body text-center">
-                        <h5 class="card-title">Temperature</h5>
-                        <div class="value-display" id="temperature">--</div>
-                        <div class="text-muted">°C</div>
+                <div class="server-section">
+                    <div class="server-header">
+                        <h3>Server 1 (Port 4840)</h3>
+                        <div id="server1-connection-status" class="connection-status bg-secondary text-white">
+                            <div>Connection Status: <span id="server1-connection-status-text">Initializing...</span></div>
+                            <div class="connection-message" id="server1-connection-message"></div>
+                        </div>
+                    </div>
+                    <div class="card server-card">
+                        <div class="card-body text-center">
+                            <h5 class="card-title">Temperature</h5>
+                            <div class="value-display" id="server1-temperature">--</div>
+                            <div class="text-muted">°C</div>
+                        </div>
+                    </div>
+                    <div class="card server-card">
+                        <div class="card-body text-center">
+                            <h5 class="card-title">Pressure</h5>
+                            <div class="value-display" id="server1-pressure">--</div>
+                            <div class="text-muted">bar</div>
+                        </div>
+                    </div>
+                    <div class="card server-card">
+                        <div class="card-body text-center">
+                            <h5 class="card-title">Status</h5>
+                            <span class="badge status-badge bg-secondary" id="server1-status">--</span>
+                        </div>
+                    </div>
+                    <div class="text-center mt-3">
+                        <div class="timestamp" id="server1-timestamp">Last update: --</div>
                     </div>
                 </div>
             </div>
 
+            <!-- Server 2 -->
             <div class="col-md-4">
-                <div class="card">
-                    <div class="card-body text-center">
-                        <h5 class="card-title">Pressure</h5>
-                        <div class="value-display" id="pressure">--</div>
-                        <div class="text-muted">bar</div>
+                <div class="server-section">
+                    <div class="server-header">
+                        <h3>Server 2 (Port 4841)</h3>
+                        <div id="server2-connection-status" class="connection-status bg-secondary text-white">
+                            <div>Connection Status: <span id="server2-connection-status-text">Initializing...</span></div>
+                            <div class="connection-message" id="server2-connection-message"></div>
+                        </div>
+                    </div>
+                    <div class="card server-card">
+                        <div class="card-body text-center">
+                            <h5 class="card-title">Temperature</h5>
+                            <div class="value-display" id="server2-temperature">--</div>
+                            <div class="text-muted">°C</div>
+                        </div>
+                    </div>
+                    <div class="card server-card">
+                        <div class="card-body text-center">
+                            <h5 class="card-title">Pressure</h5>
+                            <div class="value-display" id="server2-pressure">--</div>
+                            <div class="text-muted">bar</div>
+                        </div>
+                    </div>
+                    <div class="card server-card">
+                        <div class="card-body text-center">
+                            <h5 class="card-title">Status</h5>
+                            <span class="badge status-badge bg-secondary" id="server2-status">--</span>
+                        </div>
+                    </div>
+                    <div class="text-center mt-3">
+                        <div class="timestamp" id="server2-timestamp">Last update: --</div>
                     </div>
                 </div>
             </div>
 
+            <!-- Server 3 -->
             <div class="col-md-4">
-                <div class="card">
-                    <div class="card-body text-center">
-                        <h5 class="card-title">Status</h5>
-                        <span class="badge status-badge bg-secondary" id="status">--</span>
+                <div class="server-section">
+                    <div class="server-header">
+                        <h3>Server 3 (Port 4842)</h3>
+                        <div id="server3-connection-status" class="connection-status bg-secondary text-white">
+                            <div>Connection Status: <span id="server3-connection-status-text">Initializing...</span></div>
+                            <div class="connection-message" id="server3-connection-message"></div>
+                        </div>
+                    </div>
+                    <div class="card server-card">
+                        <div class="card-body text-center">
+                            <h5 class="card-title">Temperature</h5>
+                            <div class="value-display" id="server3-temperature">--</div>
+                            <div class="text-muted">°C</div>
+                        </div>
+                    </div>
+                    <div class="card server-card">
+                        <div class="card-body text-center">
+                            <h5 class="card-title">Pressure</h5>
+                            <div class="value-display" id="server3-pressure">--</div>
+                            <div class="text-muted">bar</div>
+                        </div>
+                    </div>
+                    <div class="card server-card">
+                        <div class="card-body text-center">
+                            <h5 class="card-title">Status</h5>
+                            <span class="badge status-badge bg-secondary" id="server3-status">--</span>
+                        </div>
+                    </div>
+                    <div class="text-center mt-3">
+                        <div class="timestamp" id="server3-timestamp">Last update: --</div>
                     </div>
                 </div>
             </div>
-        </div>
-
-        <div class="text-center mt-3">
-            <div class="timestamp" id="timestamp">Last update: --</div>
         </div>
     </div>
 
     <script src="/socket.io/socket.io.js"></script>
     <script>
         const socket = io();
+        const portToServerId = {
+            4840: 'server1',
+            4841: 'server2',
+            4842: 'server3'
+        };
 
-        // Handle connection status updates
-        socket.on('connection-status', (data) => {
-            const statusElement = document.getElementById('connection-status');
-            const statusText = document.getElementById('connection-status-text');
-            const messageElement = document.getElementById('connection-message');
+        // Request initial connection status when connecting
+        socket.on('connect', () => {
+            socket.emit('request-connection-status');
+        });
+
+        // Handle connection status updates for all servers
+        socket.on('all-connection-status', (states) => {
+            // Convert port-based states to server IDs
+            Object.entries(states).forEach(([port, data]) => {
+                const serverId = portToServerId[port];
+                if (serverId) {
+                    updateConnectionStatus(serverId, data);
+                }
+            });
+        });
+
+        // Handle individual server connection status updates
+        socket.on('server-connection-status', (data) => {
+            const serverId = portToServerId[data.port];
+            if (serverId) {
+                updateConnectionStatus(serverId, data);
+            }
+        });
+
+        function updateConnectionStatus(serverId, data) {
+            const statusElement = document.getElementById(`${serverId}-connection-status`);
+            const statusText = document.getElementById(`${serverId}-connection-status-text`);
+            const messageElement = document.getElementById(`${serverId}-connection-message`);
+
+            if (!statusElement || !statusText || !messageElement) return;
 
             statusText.textContent = data.status.charAt(0).toUpperCase() + data.status.slice(1);
-            messageElement.textContent = data.message;
+            messageElement.textContent = data.message || '';
 
             // Update status color
             statusElement.className = 'connection-status text-white';
@@ -114,18 +224,30 @@
                 default:
                     statusElement.classList.add('bg-secondary');
             }
-        });
+        }
 
+        // Handle OPC-UA data updates for each server
         socket.on('opcua-data', (data) => {
-            document.getElementById('temperature').textContent = data.temperature.toFixed(1);
-            document.getElementById('pressure').textContent = data.pressure.toFixed(2);
+            const serverId = portToServerId[data.serverId];
+            if (!serverId) return;
 
-            const statusBadge = document.getElementById('status');
-            statusBadge.textContent = data.status;
-            statusBadge.className = `badge status-badge ${data.status === 'Running' ? 'bg-success' : 'bg-danger'}`;
+            const tempElement = document.getElementById(`${serverId}-temperature`);
+            const pressElement = document.getElementById(`${serverId}-pressure`);
+            const statusElement = document.getElementById(`${serverId}-status`);
+            const timestampElement = document.getElementById(`${serverId}-timestamp`);
 
-            const timestamp = new Date(data.timestamp).toLocaleTimeString();
-            document.getElementById('timestamp').textContent = `Last update: ${timestamp}`;
+            if (tempElement) tempElement.textContent = data.temperature.toFixed(1);
+            if (pressElement) pressElement.textContent = data.pressure.toFixed(2);
+
+            if (statusElement) {
+                statusElement.textContent = data.status;
+                statusElement.className = `badge status-badge ${data.status === 'Running' ? 'bg-success' : 'bg-danger'}`;
+            }
+
+            if (timestampElement) {
+                const timestamp = new Date(data.timestamp).toLocaleTimeString();
+                timestampElement.textContent = `Last update: ${timestamp}`;
+            }
         });
     </script>
 </body>
