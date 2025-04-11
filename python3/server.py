@@ -1,13 +1,15 @@
 from opcua import ua, Server
 import time
 import math
+import argparse
 
-def main():
+def main(port=4840):
     # Create a new server
     server = Server()
 
     # Set server endpoint
-    server.set_endpoint("opc.tcp://0.0.0.0:4840/freeopcua/server/")
+    endpoint = f"opc.tcp://0.0.0.0:{port}/freeopcua/server/"
+    server.set_endpoint(endpoint)
 
     # Set server name
     server.set_server_name("OPC-UA Sample Server")
@@ -32,10 +34,10 @@ def main():
     myvar2.set_writable()
     myvar3.set_writable()
 
-    print("Starting OPC-UA server...")
+    print(f"Starting OPC-UA server on port {port}...")
     # Start server
     server.start()
-    print("OPC-UA server is running on opc.tcp://0.0.0.0:4840/freeopcua/server/")
+    print(f"OPC-UA server is running at {endpoint}")
 
     try:
         # Simulate data changes
@@ -57,7 +59,7 @@ def main():
                 new_status = "Stopped" if current_status == "Running" else "Running"
                 myvar3.set_value(new_status)
 
-            print(f"Updated values - Temperature: {temperature:.1f}°C, Pressure: {new_pressure:.1f}hPa, Status: {myvar3.get_value()}")
+            print(f"[Port {port}] Updated values - Temperature: {temperature:.1f}°C, Pressure: {new_pressure:.1f}hPa, Status: {myvar3.get_value()}")
 
             time.sleep(1)
             time_offset += 1
@@ -65,7 +67,12 @@ def main():
     finally:
         # Close connection
         server.stop()
-        print("OPC-UA server stopped.")
+        print(f"OPC-UA server on port {port} stopped.")
 
 if __name__ == "__main__":
-    main()
+    parser = argparse.ArgumentParser(description='OPC-UA Server with configurable port')
+    parser.add_argument('-p', '--port', type=int, default=4840,
+                      help='Port number for the OPC-UA server (default: 4840)')
+    args = parser.parse_args()
+
+    main(args.port)
