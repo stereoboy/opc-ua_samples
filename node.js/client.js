@@ -12,25 +12,111 @@ app.get('/', (req, res) => {
     res.sendFile(__dirname + '/public/index.html');
 });
 
+const connectionStrategy = {
+    initialDelay: 1000,
+    maxRetry: 10,
+    maxDelay: 10 * 1000
+};
+
+// Global state to track OPC-UA connection status
+let globalConnectionState = {
+    status: 'initializing',
+    message: 'Starting up...'
+};
+
+async function connectToServer(client) {
+    try {
+        const endpointUrl = "opc.tcp://localhost:4840/freeopcua/server/";
+        console.log("Trying to connect to:", endpointUrl);
+        await client.connect(endpointUrl);
+        console.log("Connected to OPC-UA server!");
+        globalConnectionState = {
+            status: 'connected',
+            message: 'Connected to OPC-UA server'
+        };
+        return true;
+    } catch (err) {
+        console.error("Connection failed:", err.message);
+        globalConnectionState = {
+            status: 'error',
+            message: 'Connection failed: ' + err.message
+        };
+        return false;
+    }
+}
+
+// Handle Socket.IO connections
+io.on('connection', (socket) => {
+    console.log('Web client connected');
+    // Send current connection state to newly connected clients
+    socket.emit('connection-status', globalConnectionState);
+});
+
 async function main() {
     try {
-        // Create client
-        const client = OPCUAClient.create({
-            endpoint_must_exist: false,
-            connectionStrategy: {
-                maxRetry: 5,
-                initialDelay: 1000,
-                maxDelay: 20000
-            }
+        // Start HTTP server first so we can show connection status
+        http.listen(3000, () => {
+            console.log('Web server listening on http://localhost:3000');
         });
 
-        // Connect to server
-        await client.connect("opc.tcp://localhost:4840/freeopcua/server/");
-        console.log("Connected to OPC-UA server");
+        // Create client
+        const client = OPCUAClient.create({
+            applicationName: "NodeOPCUA-Client",
+            connectionStrategy: connectionStrategy,
+            securityMode: 1,
+            securityPolicy: "None",
+            endpoint_must_exist: false
+        });
+
+        // Handle client events
+        client.on("backoff", (retry, delay) => {
+            const message = `Retrying to connect (attempt #${retry}, delay: ${delay}ms)`;
+            console.log(message);
+            globalConnectionState = {
+                status: 'connecting',
+                message: message
+            };
+            io.emit('connection-status', globalConnectionState);
+        });
+
+        client.on("connection_lost", () => {
+            console.log("Connection lost!");
+            globalConnectionState = {
+                status: 'disconnected',
+                message: 'Connection to OPC-UA server lost! Attempting to reconnect...'
+            };
+            io.emit('connection-status', globalConnectionState);
+        });
+
+        client.on("connection_reestablished", () => {
+            console.log("Connection reestablished!");
+            globalConnectionState = {
+                status: 'connected',
+                message: 'Connection reestablished'
+            };
+            io.emit('connection-status', globalConnectionState);
+        });
+
+        // Initial connection attempt
+        globalConnectionState = {
+            status: 'connecting',
+            message: 'Attempting to connect to OPC-UA server...'
+        };
+        io.emit('connection-status', globalConnectionState);
+
+        const connected = await connectToServer(client);
+        if (!connected) {
+            throw new Error("Failed to connect to OPC-UA server");
+        }
 
         // Create session
         const session = await client.createSession();
-        console.log("OPC-UA session created");
+        console.log("Session created successfully");
+        globalConnectionState = {
+            status: 'connected',
+            message: 'Connected and session created'
+        };
+        io.emit('connection-status', globalConnectionState);
 
         // Read variables
         const nodesToRead = [
@@ -48,13 +134,8 @@ async function main() {
             }
         ];
 
-        // Start HTTP server
-        http.listen(3000, () => {
-            console.log('Web server listening on http://localhost:3000');
-        });
-
         // Read values every second and emit to connected clients
-        setInterval(async () => {
+        const intervalId = setInterval(async () => {
             try {
                 const dataValue = await session.read(nodesToRead);
                 const data = {
@@ -65,20 +146,36 @@ async function main() {
                 };
                 io.emit('opcua-data', data);
             } catch (err) {
-                console.error("Error reading values:", err);
+                console.error("Error reading values:", err.message);
+                globalConnectionState = {
+                    status: 'error',
+                    message: 'Error reading values: ' + err.message
+                };
+                io.emit('connection-status', globalConnectionState);
             }
         }, 1000);
 
         // Handle process termination
         process.on("SIGINT", async () => {
             console.log("Closing session...");
+            clearInterval(intervalId);
             await session.close();
             await client.disconnect();
+            globalConnectionState = {
+                status: 'disconnected',
+                message: 'Connection closed'
+            };
+            io.emit('connection-status', globalConnectionState);
             process.exit(0);
         });
 
     } catch (err) {
-        console.error("Error:", err);
+        console.error("Fatal error:", err.message);
+        globalConnectionState = {
+            status: 'error',
+            message: 'Fatal error: ' + err.message
+        };
+        io.emit('connection-status', globalConnectionState);
         process.exit(1);
     }
 }

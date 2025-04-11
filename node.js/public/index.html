@@ -22,11 +22,28 @@
             color: #666;
             font-size: 0.9rem;
         }
+        .connection-status {
+            padding: 10px 20px;
+            border-radius: 5px;
+            font-weight: bold;
+            margin: 0 auto 2rem auto;
+            max-width: 400px;
+        }
+        .connection-message {
+            font-size: 0.9rem;
+            margin-top: 5px;
+        }
     </style>
 </head>
 <body>
     <div class="container mt-5">
         <h1 class="text-center mb-4">OPC-UA Client Dashboard</h1>
+
+        <!-- Connection Status -->
+        <div id="connection-status" class="connection-status bg-secondary text-white">
+            <div>Connection Status: <span id="connection-status-text">Initializing...</span></div>
+            <div class="connection-message" id="connection-message"></div>
+        </div>
 
         <div class="row">
             <div class="col-md-4">
@@ -67,6 +84,37 @@
     <script src="/socket.io/socket.io.js"></script>
     <script>
         const socket = io();
+
+        // Handle connection status updates
+        socket.on('connection-status', (data) => {
+            const statusElement = document.getElementById('connection-status');
+            const statusText = document.getElementById('connection-status-text');
+            const messageElement = document.getElementById('connection-message');
+
+            statusText.textContent = data.status.charAt(0).toUpperCase() + data.status.slice(1);
+            messageElement.textContent = data.message;
+
+            // Update status color
+            statusElement.className = 'connection-status text-white';
+            switch(data.status) {
+                case 'connected':
+                    statusElement.classList.add('bg-success');
+                    break;
+                case 'connecting':
+                    statusElement.classList.add('bg-warning');
+                    statusText.classList.add('text-dark');
+                    messageElement.classList.add('text-dark');
+                    break;
+                case 'disconnected':
+                    statusElement.classList.add('bg-danger');
+                    break;
+                case 'error':
+                    statusElement.classList.add('bg-danger');
+                    break;
+                default:
+                    statusElement.classList.add('bg-secondary');
+            }
+        });
 
         socket.on('opcua-data', (data) => {
             document.getElementById('temperature').textContent = data.temperature.toFixed(1);
