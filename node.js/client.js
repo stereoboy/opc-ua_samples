@@ -1,4 +1,4 @@
-const { OPCUAClient, AttributeIds } = require("node-opcua");
+const { OPCUAClient, AttributeIds, resolveNodeId } = require("node-opcua");
 const express = require('express');
 const app = express();
 const http = require('http').createServer(app);
@@ -118,18 +118,45 @@ async function main() {
         };
         io.emit('connection-status', globalConnectionState);
 
-        // Read variables
+        // Browse root folder to find objects
+        const browseResult = await session.browse("RootFolder");
+        console.log("Root folder contents:", browseResult.references.map(ref => ({
+            nodeId: ref.nodeId.toString(),
+            browseName: ref.browseName.toString()
+        })));
+
+        // Find Objects folder and browse it
+        const objectsFolder = browseResult.references.find(ref => ref.browseName.name === "Objects");
+        if (objectsFolder) {
+            const objectsFolderBrowse = await session.browse(objectsFolder.nodeId.toString());
+            console.log("Objects folder contents:", objectsFolderBrowse.references.map(ref => ({
+                nodeId: ref.nodeId.toString(),
+                browseName: ref.browseName.toString()
+            })));
+
+            // Browse MyObject to get its variables
+            const myObject = objectsFolderBrowse.references.find(ref => ref.browseName.name === "MyObject");
+            if (myObject) {
+                const myObjectBrowse = await session.browse(myObject.nodeId.toString());
+                console.log("MyObject contents:", myObjectBrowse.references.map(ref => ({
+                    nodeId: ref.nodeId.toString(),
+                    browseName: ref.browseName.toString()
+                })));
+            }
+        }
+
+        // Read variables using the correct namespace index and path
         const nodesToRead = [
             {
-                nodeId: "ns=2;s=MyObject/Temperature",
+                nodeId: "ns=2;i=2",  // Temperature
                 attributeId: AttributeIds.Value
             },
             {
-                nodeId: "ns=2;s=MyObject/Pressure",
+                nodeId: "ns=2;i=3",  // Pressure
                 attributeId: AttributeIds.Value
             },
             {
-                nodeId: "ns=2;s=MyObject/Status",
+                nodeId: "ns=2;i=4",  // Status
                 attributeId: AttributeIds.Value
             }
         ];
@@ -138,13 +165,23 @@ async function main() {
         const intervalId = setInterval(async () => {
             try {
                 const dataValue = await session.read(nodesToRead);
-                const data = {
-                    temperature: dataValue[0].value.value,
-                    pressure: dataValue[1].value.value,
-                    status: dataValue[2].value.value,
-                    timestamp: new Date().toISOString()
-                };
-                io.emit('opcua-data', data);
+                if (dataValue && dataValue.length === 3) {
+                    console.log("Read values:", {
+                        temperature: dataValue[0].value.value,
+                        pressure: dataValue[1].value.value,
+                        status: dataValue[2].value.value
+                    });
+
+                    const data = {
+                        temperature: dataValue[0].value.value,
+                        pressure: dataValue[1].value.value,
+                        status: dataValue[2].value.value,
+                        timestamp: new Date().toISOString()
+                    };
+                    io.emit('opcua-data', data);
+                } else {
+                    console.error("Invalid data format received");
+                }
             } catch (err) {
                 console.error("Error reading values:", err.message);
                 globalConnectionState = {
