@@ -1,0 +1,5 @@
+{
+  "watch": ["client.js", "public/"],
+  "ignore": ["node_modules/", "*.test.js"],
+  "ext": "js,html,css"
+}
