@@ -26,3 +26,7 @@ python3 -m pip install -r requirements.txt
 ```
 
 ## Node.js Client
+```
+npm install
+npm start
+```
