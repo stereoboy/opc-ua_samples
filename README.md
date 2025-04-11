@@ -1,6 +1,6 @@
 # opc-ua_samples
 
-<img src="./docs/screenshots/video_2025_04_11_0.gif" width="640">
+
 
 ## Javascript
 ### node-opcua
@@ -27,12 +27,24 @@ python3 -m pip install --upgrade pip setuptools==70.0.0 importlib_metadata
 python3 -m pip install -r requirements.txt
 ```
 
+## Next.js Client
+
+<img src="./docs/screenshots/video_2025_04_11_1.gif" width="640">
+```
+npm install @emotion/cache @emotion/react @emotion/styled @mui/material @mui/icons-material socket.io-client
+npm install socket.io socket.io-client @types/socket.io @types/socket.io-client node-opcua
+npm install @emotion/server
+```
+```
+npm run dev
+```
+
 ## Node.js Client
 ```
 npm install
 npm run dev
 ```
-
+<img src="./docs/screenshots/video_2025_04_11_0.gif" width="640">
 
 ## Run Full Test
 ```
